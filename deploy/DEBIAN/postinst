@@ -1,0 +1,25 @@
+﻿#!/bin/bash
+set -e
+
+echo "RK3588 RT Middleware v1.0.0 - Post Install"
+echo "========================================="
+
+# Create directories
+mkdir -p /opt/rk3588-rt/{bin,config,logs}
+
+# Set capabilities for jitter monitor (allow RT priority without full root)
+setcap cap_sys_nice+ep /opt/rk3588-rt/bin/jitter_monitor.py 2>/dev/null || true
+
+# Enable RT group scheduling if available
+if [ -f /proc/sys/kernel/sched_rt_runtime_us ]; then
+    echo 980000 > /proc/sys/kernel/sched_rt_runtime_us 2>/dev/null || true
+fi
+
+echo ""
+echo "Installation complete!"
+echo "Run: sudo rk3588-rt-isolate 4-7    # Isolate A76 cores"
+echo "Run: sudo rk3588-rt-jitter -d 60   # 60s latency test"
+echo "Run: sudo rk3588-rt-ethercat       # Install EtherCAT"
+echo ""
+echo "For <50us latency, build PREEMPT_RT kernel:"
+echo "  sudo rk3588-rt-build-kernel"

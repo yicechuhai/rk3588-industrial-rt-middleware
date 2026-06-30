@@ -1,0 +1,6 @@
+﻿#!/bin/bash
+set -e
+echo "Removing RK3588 RT Middleware..."
+# Restore default settings
+echo 950000 > /proc/sys/kernel/sched_rt_runtime_us 2>/dev/null || true
+echo "" > /sys/devices/system/cpu/isolated 2>/dev/null || true

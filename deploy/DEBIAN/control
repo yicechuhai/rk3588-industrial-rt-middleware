@@ -1,0 +1,22 @@
+﻿Package: rk3588-rt-middleware
+Version: 1.0.0
+Architecture: arm64
+Maintainer: RK3588 Industrial Toolkit Team <1513741889@qq.com>
+Depends: python3 (>= 3.8), python3-numpy, util-linux (>= 2.34)
+Recommends: linux-image-rt-arm64 | linux-image-6.1.75-rt
+Description: RK3588 Industrial Protocol Real-Time Middleware
+ CPU core isolation, IRQ affinity configuration,
+ real-time latency monitoring (jitter analysis),
+ and industrial protocol stack integration
+ (EtherCAT, Profinet, OPC UA, Modbus).
+ .
+ Features:
+  - CPU isolation with AMP support (A55 + A76)
+  - IRQ affinity for deterministic latency
+  - Cyclictest-style jitter monitor (P99 < 50us target)
+  - IgH EtherCAT Master auto-installer
+  - PREEMPT_RT kernel build automation
+ .
+ Target: RK3588-based industrial controllers
+ Requires: PREEMPT_RT kernel for <50us latency
+Homepage: https://github.com/yicechuhai/rk3588-industrial-rt-middleware
