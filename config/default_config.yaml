@@ -1,0 +1,246 @@
+﻿# =============================================================================
+# RK3588 工业实时中间件默认配置
+# 安装路径: /etc/rk3588-rt/rt_config.yaml
+# =============================================================================
+
+# 元数据
+metadata:
+  name: "RK3588 Industrial RT Middleware"
+  version: "1.1.0"
+  description: "RK3588 工业实时中间件全局配置"
+
+# =============================================================================
+# CPU 配置
+# =============================================================================
+cpu:
+  # 核心分配策略 (big.LITTLE AMP)
+  # A55 (Cores 0-3): Linux 管理平面 — 网络、存储、UI
+  # A76 (Cores 4-7): 实时平面 — EtherCAT、运动控制、传感器融合
+  linux_cores: "0-3"
+  rt_cores: "4-7"
+
+  # CPU 调频策略
+  # performance: 固定最高频率 (推荐实时场景)
+  # ondemand:    按需调频 (功耗优先)
+  # schedutil:   调度器感知调频
+  governor: "performance"
+
+  # 热管理
+  thermal:
+    warning_temp_c: 75    # 警告温度阈值
+    critical_temp_c: 85   # 临界温度阈值
+
+# =============================================================================
+# 实时调度器配置
+# =============================================================================
+scheduler:
+  # RT 任务 CPU 时间预算 (每调度周期)
+  # 980000us = 98%, 保留 2% 给非 RT 任务防止锁死
+  rt_runtime_us: 980000
+
+  # RT 调度周期
+  rt_period_us: 1000000
+
+  # 默认 RT 优先级 (SCHED_FIFO, 1-99)
+  default_priority: 80
+
+  # 内存锁定
+  memlock: "unlimited"
+
+# =============================================================================
+# 内核启动参数
+# =============================================================================
+kernel_cmdline:
+  # 隔离实时核心
+  isolcpus: "4-7"
+
+  # 无 tick 配置 (减少定时器中断)
+  nohz_full: "4-7"
+
+  # RCU 回调卸载
+  rcu_nocbs: "4-7"
+  rcu_nocb_poll: true
+
+  # IRQ 亲和性 (中断固定到管理核心)
+  irqaffinity: "0-3"
+
+  # 其他优化
+  nosoftlockup: true       # 禁用软锁检测
+  nowatchdog: true         # 禁用看门狗
+  mitigations: "off"       # 禁用 CPU 漏洞缓解
+  preempt: "full"          # 完全抢占
+
+# =============================================================================
+# 监控配置
+# =============================================================================
+monitor:
+  # 采样间隔 (微秒)
+  interval_us: 500
+
+  # 默认测试时长 (秒)
+  duration_s: 60
+
+  # 输出目录
+  output_dir: "/opt/rk3588-rt/logs"
+
+  # 日志目录
+  log_dir: "/var/log/rk3588-rt"
+
+  # CSV 自动导出
+  csv_export: true
+  csv_dir: "/opt/rk3588-rt/logs"
+
+  # 直方图配置
+  histogram:
+    enabled: true
+    bins: 50               # 分桶数
+    auto_export: true      # 自动导出直方图 CSV
+
+  # 延迟等级阈值 (us)
+  latency_thresholds:
+    grade_a_plus: 50       # P99 < 50us  → A+
+    grade_a: 100           # P99 < 100us → A
+    grade_b: 500           # P99 < 500us → B
+    grade_c: 1000          # P99 < 1ms   → C
+    # ≥ 1ms → D
+
+  # 告警规则
+  alerts:
+    p99_warning_us: 100    # P99 超过此值告警
+    max_warning_us: 1000   # Max 超过此值告警
+    overrun_warning: 10    # 错过调度次数告警
+
+# =============================================================================
+# 工业协议配置
+# =============================================================================
+protocols:
+  # --- EtherCAT ---
+  ethercat:
+    enabled: false
+    version: "1.6.0"
+    master_id: 0
+    install_dir: "/opt/ethercat"
+    cycle_time_us: 250     # 通讯周期
+    slaves_max: 64         # 最大从站数
+
+  # --- Modbus TCP ---
+  modbus:
+    enabled: false
+    tcp_port: 502
+    rtu_port: "/dev/ttyRS485"
+    # 寄存器容量
+    holding_registers: 1024
+    coils: 1024
+    input_registers: 1024
+    # 超时设置
+    timeout_ms: 1000
+    # RT 优先级
+    rt_priority: 80
+    # 实现方式: auto | pymodbus | builtin
+    backend: "auto"
+
+  # --- OPC UA ---
+  opcua:
+    enabled: false
+    port: 4840
+    name: "RK3588-RT-Server"
+    namespace: "http://rk3588-rt.local"
+    # 安全策略
+    security_policy: "None"  # None | Basic256Sha256
+    # 更新间隔
+    status_update_interval_s: 2.0
+    # 允许匿名访问
+    allow_anonymous: true
+
+  # --- Profinet (占位) ---
+  profinet:
+    enabled: false
+    cycle_time_us: 1000
+
+# =============================================================================
+# PREEMPT_RT 内核构建配置
+# =============================================================================
+rt_kernel:
+  # Rockchip BSP 分支
+  bsp_branch: "linux-6.1.y"
+  bsp_source: "rockchip"
+
+  # 目标架构
+  arch: "arm64"
+
+  # 交叉编译器前缀 (留空使用本机编译)
+  cross_compile: "aarch64-linux-gnu-"
+
+  # 编译并行数
+  build_jobs: 4
+
+  # 安装路径
+  output_dir: "/boot"
+
+  # 构建工作目录
+  work_dir: "/tmp/rk3588-rt-build"
+
+  # 保留构建目录 (调试用)
+  keep_workdir: false
+
+# =============================================================================
+# I/O 配置
+# =============================================================================
+io:
+  # GPIO 配置
+  gpio:
+    chip: "/dev/gpiochip0"
+    pins:
+      DI_0: { number: 0,  direction: "in",  description: "数字输入 0" }
+      DI_1: { number: 1,  direction: "in",  description: "数字输入 1" }
+      DO_0: { number: 8,  direction: "out", description: "数字输出 0" }
+      DO_1: { number: 9,  direction: "out", description: "数字输出 1" }
+
+  # SPI 配置
+  spi:
+    device: "/dev/spidev0.0"
+    speed_hz: 10000000
+    mode: 0
+
+  # I2C 配置
+  i2c:
+    device: "/dev/i2c-1"
+    speed_hz: 400000
+
+  # UART/RS485 配置
+  uart:
+    rs485_device: "/dev/ttyRS485"
+    baudrate: 115200
+    data_bits: 8
+    stop_bits: 1
+    parity: "N"
+
+# =============================================================================
+# 日志配置
+# =============================================================================
+logging:
+  level: "INFO"              # DEBUG | INFO | WARNING | ERROR
+  format: "%(asctime)s [%(levelname)-7s] %(name)s: %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+  max_size_mb: 100
+  backup_count: 5
+  # 模块级日志级别
+  modules:
+    jitter_monitor: "INFO"
+    modbus_server: "INFO"
+    opcua_server: "INFO"
+
+# =============================================================================
+# 网络配置
+# =============================================================================
+network:
+  # 实时网络接口 (用于 EtherCAT/Profinet)
+  rt_interface: "eth0"
+  # 管理网络接口
+  mgmt_interface: "eth1"
+  # 接口优先级
+  ethtool:
+    ring_rx: 4096          # RX 环形缓冲区
+    ring_tx: 4096          # TX 环形缓冲区
+    coalesce_rx_usecs: 0   # 禁用中断合并
+    coalesce_tx_usecs: 0

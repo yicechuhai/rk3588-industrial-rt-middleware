@@ -1,22 +1,38 @@
 ﻿Package: rk3588-rt-middleware
-Version: 1.0.0
+Version: 1.1.0
 Architecture: arm64
 Maintainer: RK3588 Industrial Toolkit Team <1513741889@qq.com>
+Section: utils
+Priority: optional
 Depends: python3 (>= 3.8), python3-numpy, util-linux (>= 2.34)
-Recommends: linux-image-rt-arm64 | linux-image-6.1.75-rt
+Recommends: python3-yaml, rt-tests, linux-image-rt-arm64 | linux-image-6.1.75-rt, numactl
+Suggests: python3-asyncua, python3-pymodbus
+Conflicts: 
+Replaces: 
+Homepage: https://github.com/yicechuhai/rk3588-industrial-rt-middleware
 Description: RK3588 Industrial Protocol Real-Time Middleware
- CPU core isolation, IRQ affinity configuration,
- real-time latency monitoring (jitter analysis),
- and industrial protocol stack integration
- (EtherCAT, Profinet, OPC UA, Modbus).
+ Real-time middleware for industrial control applications
+ on Rockchip RK3588 SoC and compatible ARM64 platforms.
  .
  Features:
-  - CPU isolation with AMP support (A55 + A76)
-  - IRQ affinity for deterministic latency
-  - Cyclictest-style jitter monitor (P99 < 50us target)
+  - CPU core isolation with AMP support (big.LITTLE A55 + A76)
+  - IRQ affinity configuration for deterministic latency
+  - PREEMPT_RT kernel build automation (apply_rt_patch.sh)
+  - One-click real-time system setup (setup_realtime.sh)
+  - Cyclictest-style jitter monitor with histogram analysis
+  - Latency analysis and report generation (Markdown/JSON)
+  - Modbus TCP server (port 502, built-in + pymodbus support)
+  - OPC UA server (port 4840, with node tree management)
+  - YAML register map configuration and conversion
   - IgH EtherCAT Master auto-installer
-  - PREEMPT_RT kernel build automation
+  - Debian packaging with multi-architecture support
  .
- Target: RK3588-based industrial controllers
- Requires: PREEMPT_RT kernel for <50us latency
-Homepage: https://github.com/yicechuhai/rk3588-industrial-rt-middleware
+ Performance Targets:
+  - PREEMPT_RT: P99 < 50us, Max < 80us (Grade A+)
+  - PREEMPT_VOLUNTARY: P99 < 500us, Max < 5ms (Grade B)
+  - Xenomai/Cobalt: P99 < 25us, Max < 30us
+ .
+ Target Platforms:
+  - RK3588-based industrial controllers (Rock 5, Orange Pi 5, etc.)
+  - Compatible ARM64 SBCs with PREEMPT_RT kernel
+  - x86_64 development environments (amd64 package)

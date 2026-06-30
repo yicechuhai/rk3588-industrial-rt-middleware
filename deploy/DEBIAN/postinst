@@ -1,25 +1,162 @@
 ﻿#!/bin/bash
 set -e
 
-echo "RK3588 RT Middleware v1.0.0 - Post Install"
-echo "========================================="
+VERSION="1.1.0"
 
-# Create directories
+echo "RK3588 RT Middleware v${VERSION} - Post Install"
+echo "==============================================="
+
+# =============================================================================
+# 创建运行时目录
+# =============================================================================
+echo "[1/6] 创建运行时目录..."
 mkdir -p /opt/rk3588-rt/{bin,config,logs}
+chmod 755 /opt/rk3588-rt/{bin,config,logs}
 
-# Set capabilities for jitter monitor (allow RT priority without full root)
-setcap cap_sys_nice+ep /opt/rk3588-rt/bin/jitter_monitor.py 2>/dev/null || true
+# 日志目录
+if [ ! -d /var/log/rk3588-rt ]; then
+    mkdir -p /var/log/rk3588-rt
+    chmod 755 /var/log/rk3588-rt
+fi
 
-# Enable RT group scheduling if available
+# =============================================================================
+# 设置能力标志
+# =============================================================================
+echo "[2/6] 设置实时能力标志..."
+for script in /opt/rk3588-rt/bin/*.py; do
+    if [ -f "$script" ]; then
+        # 允许设置 RT 优先级 (SCHED_FIFO)
+        setcap cap_sys_nice+ep "$script" 2>/dev/null || true
+        # 允许锁定内存 (mlockall)
+        setcap cap_ipc_lock+ep "$script" 2>/dev/null || true
+    fi
+done
+
+# =============================================================================
+# 配置实时调度器
+# =============================================================================
+echo "[3/6] 配置实时调度器..."
 if [ -f /proc/sys/kernel/sched_rt_runtime_us ]; then
     echo 980000 > /proc/sys/kernel/sched_rt_runtime_us 2>/dev/null || true
 fi
+if [ -f /proc/sys/kernel/sched_rt_period_us ]; then
+    echo 1000000 > /proc/sys/kernel/sched_rt_period_us 2>/dev/null || true
+fi
 
+# =============================================================================
+# 持久化 sysctl 配置
+# =============================================================================
+echo "[4/6] 持久化系统配置..."
+cat > /etc/sysctl.d/99-rk3588-rt.conf << 'SYSCTL'
+# RK3588 Real-Time Configuration
+# Installed by rk3588-rt-middleware
+kernel.sched_rt_runtime_us = 980000
+kernel.sched_rt_period_us = 1000000
+kernel.nmi_watchdog = 0
+kernel.watchdog = 0
+kernel.watchdog_thresh = 0
+vm.stat_interval = 10
+SYSCTL
+
+sysctl -p /etc/sysctl.d/99-rk3588-rt.conf 2>/dev/null || true
+
+# =============================================================================
+# 配置内存锁定限制
+# =============================================================================
+cat > /etc/security/limits.d/99-rk3588-rt.conf << 'LIMITS'
+# RK3588 RT Middleware: unlimited memory locking for real-time tasks
+*    -   memlock     unlimited
+root -   memlock     unlimited
+LIMITS
+
+# =============================================================================
+# 检查 Python 依赖
+# =============================================================================
+echo "[5/6] 检查 Python 依赖..."
+MISSING_DEPS=()
+
+if ! python3 -c "import numpy" 2>/dev/null; then
+    MISSING_DEPS+=("python3-numpy")
+fi
+
+if ! python3 -c "import yaml" 2>/dev/null; then
+    MISSING_DEPS+=("python3-yaml (可选, YAML 配置支持)")
+fi
+
+if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
+    echo "  ⚠️  缺少依赖: ${MISSING_DEPS[*]}"
+    echo "  安装: sudo apt-get install ${MISSING_DEPS[*]}"
+else
+    echo "  ✅ Python 依赖完整"
+fi
+
+# =============================================================================
+# 验证安装
+# =============================================================================
+echo "[6/6] 验证安装..."
+
+# 检查符号链接
+declare -A EXPECTED_LINKS=(
+    ["/usr/bin/rk3588-rt-isolate"]="cpu_isolation.sh"
+    ["/usr/bin/rk3588-rt-irq"]="irq_affinity.sh"
+    ["/usr/bin/rk3588-rt-jitter"]="jitter_monitor.py"
+    ["/usr/bin/rk3588-rt-analyze"]="latency_analyzer.py"
+    ["/usr/bin/rk3588-rt-build-kernel"]="apply_rt_patch.sh"
+    ["/usr/bin/rk3588-rt-setup"]="setup_realtime.sh"
+    ["/usr/bin/rk3588-rt-ethercat"]="install_ethercat.sh"
+    ["/usr/bin/rk3588-rt-modbus"]="modbus_tcp_server.py"
+    ["/usr/bin/rk3588-rt-opcua"]="opcua_server.py"
+    ["/usr/bin/rk3588-rt-regmap"]="yaml_to_register_map.py"
+)
+
+missing_links=0
+for link in "${!EXPECTED_LINKS[@]}"; do
+    if [ ! -L "$link" ]; then
+        echo "  ⚠️  缺少符号链接: $link"
+        missing_links=$((missing_links + 1))
+    fi
+done
+
+if [ $missing_links -eq 0 ]; then
+    echo "  ✅ 所有符号链接就绪"
+fi
+
+# =============================================================================
+# PREEMPT_RT 检测
+# =============================================================================
 echo ""
-echo "Installation complete!"
-echo "Run: sudo rk3588-rt-isolate 4-7    # Isolate A76 cores"
-echo "Run: sudo rk3588-rt-jitter -d 60   # 60s latency test"
-echo "Run: sudo rk3588-rt-ethercat       # Install EtherCAT"
+if [ -f /sys/kernel/realtime ] && [ "$(cat /sys/kernel/realtime)" = "1" ]; then
+    echo "✅ PREEMPT_RT 内核已就绪"
+else
+    echo "⚠️  未检测到 PREEMPT_RT 内核"
+fi
+
+# =============================================================================
+# 安装完成摘要
+# =============================================================================
 echo ""
-echo "For <50us latency, build PREEMPT_RT kernel:"
-echo "  sudo rk3588-rt-build-kernel"
+echo "==============================================="
+echo "  ✅ 安装完成！RK3588 RT Middleware v${VERSION}"
+echo "==============================================="
+echo ""
+echo "  快速开始:"
+echo "    sudo rk3588-rt-isolate 4-7        # 隔离 A76 核心"
+echo "    sudo rk3588-rt-irq isolate 0-3    # 固定 IRQ 到 A55"
+echo "    sudo rk3588-rt-jitter -d 60       # 60秒延迟测试"
+echo ""
+echo "  协议服务:"
+echo "    sudo rk3588-rt-modbus             # Modbus TCP (port 502)"
+echo "    sudo rk3588-rt-opcua              # OPC UA (port 4840)"
+echo "    sudo rk3588-rt-ethercat           # 安装 EtherCAT Master"
+echo ""
+echo "  分析与配置:"
+echo "    rk3588-rt-analyze <data.csv>      # 延迟分析报告"
+echo "    rk3588-rt-regmap config.yaml      # 寄存器映射转换"
+echo "    rk3588-rt-setup                   # 一键实时系统配置"
+echo "    rk3588-rt-build-kernel            # 构建 PREEMPT_RT 内核"
+echo ""
+echo "  配置: /etc/rk3588-rt/rt_config.yaml"
+echo "  日志: /var/log/rk3588-rt/"
+echo ""
+echo "  文档: /usr/share/doc/rk3588-rt-middleware/"
+echo "==============================================="
